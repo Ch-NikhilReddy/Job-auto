@@ -1,0 +1,72 @@
+import { nikhilProfile } from './profile.js';
+
+export const dashboardSummary = {
+  profile: {
+    fullName: nikhilProfile.fullName,
+    education: `${nikhilProfile.education} — ${nikhilProfile.university}`,
+    academicStatus: nikhilProfile.academicStatus,
+    currentCity: nikhilProfile.currentCity,
+    objective: nikhilProfile.objective,
+    preferredWork: nikhilProfile.preferredWork,
+    availability: nikhilProfile.availability,
+  },
+  metrics: [
+    { label: 'New matching jobs', value: 24, trend: '+12%' },
+    { label: 'Jobs awaiting review', value: 8, trend: '+3' },
+    { label: 'Applications submitted', value: 12, trend: '+2' },
+    { label: 'Interviews', value: 3, trend: '+1' },
+    { label: 'Resume ATS health', value: '89%', trend: '+8%' },
+    { label: 'Skill gaps', value: 4, trend: '-1' },
+  ],
+  jobs: [
+    {
+      id: 'job-1',
+      title: 'Frontend Engineer Intern',
+      company: 'ByteForge',
+      location: 'Hyderabad',
+      match: 92,
+      status: 'High priority',
+      reason: 'Strong React + TypeScript alignment',
+      skills: ['React', 'TypeScript', 'UI Systems'],
+    },
+    {
+      id: 'job-2',
+      title: 'Full Stack Developer',
+      company: 'CloudNest',
+      location: 'Remote',
+      match: 85,
+      status: 'Strong fit',
+      reason: 'Excellent backend and API experience fit',
+      skills: ['Node.js', 'Express', 'SQL'],
+    },
+    {
+      id: 'job-3',
+      title: 'Software Engineer Intern',
+      company: 'OpenMinds',
+      location: 'Bengaluru',
+      match: 78,
+      status: 'Needs review',
+      reason: 'Good technical fit with a few missing skills',
+      skills: ['Java', 'System Design'],
+    },
+  ],
+  skillGaps: [
+    { skill: 'System Design', coverage: 56 },
+    { skill: 'AWS', coverage: 48 },
+    { skill: 'Docker', coverage: 62 },
+    { skill: 'Data Structures', coverage: 71 },
+  ],
+  resume: {
+    atsHealth: 89,
+    strengths: ['Strong React and full-stack foundation', 'Clear project stories and GitHub footprint', 'Good alignment with internship targets'],
+    improvements: ['Add AWS and Docker keywords', 'Clarify internship impact metrics', 'Add one more project with leadership angle'],
+  },
+  automation: {
+    mode: 'Discovery mode',
+    sources: ['LinkedIn Jobs', 'Internshala', 'Greenhouse', 'Official company pages'],
+    approvalRequired: true,
+    lastRun: '2 minutes ago',
+    nextRun: 'In 30 minutes',
+  },
+  notifications: ['3 new high-priority matches', 'Resume review recommended for 2 roles', 'Application approval needed for one internship'],
+};

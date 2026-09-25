@@ -1,0 +1,25 @@
+{
+  "name": "careerpilot-ai",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @careerpilot/api",
+    "dev:web": "npm run dev -w @careerpilot/web",
+    "build": "npm run build -ws",
+    "test": "npm run test -ws --if-present"
+  },
+  "devDependencies": {
+    "@prisma/client": "^5.22.0",
+    "prisma": "^5.22.0"
+  },
+  "dependencies": {
+    "bullmq": "^5.81.5",
+    "docx": "^7.8.2",
+    "dotenv": "^18.0.3",
+    "ioredis": "^5.11.1"
+  }
+}
