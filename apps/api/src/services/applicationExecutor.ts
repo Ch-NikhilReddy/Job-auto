@@ -57,7 +57,10 @@ export async function canAutoSubmit(applicationId: string): Promise<{ ok: boolea
   const appRow = await prisma.application.findUnique({ where: { id: applicationId }, include: { job: true, answers: true } });
   if (!appRow || !appRow.job) throw new Error('Application or job not found');
   const job = appRow.job;
-  const hasUnknown = appRow.answers.some((a: any) => a.answerText === '(FLAG FOR USER)' || a.answerText === '' || a.answeredBy === 'system-flagged');
+  // An answer is UNKNOWN only if still flagged/empty AND not user-supplied (§19)
+  const hasUnknown = appRow.answers.some(
+    (a: any) => a.answeredBy !== 'user' && (a.answerText === '(FLAG FOR USER)' || a.answerText === '' || a.answeredBy === 'system-flagged')
+  );
   const answersApproved = appRow.answers.length === 0 || appRow.answers.every((a: any) => a.isApproved || a.answerText !== '');
 
   // Source supportsApply lookup

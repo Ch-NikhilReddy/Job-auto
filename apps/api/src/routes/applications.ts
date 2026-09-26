@@ -178,8 +178,11 @@ export async function applicationRoutes(app: FastifyInstance) {
             await prisma.applicationAnswer.create({ data: { applicationId: id, questionKey: a.key, questionText: a.question, answerText: '(FLAG FOR USER)', answeredBy: 'system-flagged', isApproved: false } }).catch(()=>{});
           }
         }
-        // Ensure status is APPROVAL_REQUIRED
-        await prisma.application.update({ where: { id }, data: { status: 'APPROVAL_REQUIRED' } }).catch(()=>{});
+        // Ensure status is APPROVAL_REQUIRED (never downgrade APPROVED/APPLIED/etc)
+        await prisma.application.updateMany({
+          where: { id, status: { in: ['DISCOVERED', 'MATCHED', 'READY', 'APPROVAL_REQUIRED'] } },
+          data: { status: 'APPROVAL_REQUIRED' },
+        }).catch(()=>{});
         await prisma.applicationEvent.create({ data: { applicationId: id, eventType: 'PREPARED_FOR_APPROVAL', eventData: { answersCount: answers.length, needsUser: needsUser.length } as any } }).catch(()=>{});
         await notifyApprovalRequired(id, job.title).catch(()=>{});
       } catch {}
@@ -206,8 +209,13 @@ export async function applicationRoutes(app: FastifyInstance) {
       try {
         const prisma = getPrisma()!;
         for (const a of parsed.data.answers) {
-          await prisma.applicationAnswer.updateMany({ where: { applicationId: id, questionKey: a.key }, data: { answerText: a.answer, isApproved: true, answeredBy: 'user' } });
+          const updated = await prisma.applicationAnswer.updateMany({ where: { applicationId: id, questionKey: a.key }, data: { answerText: a.answer, isApproved: true, answeredBy: 'user' } });
+          if (updated.count === 0) {
+            // No prior row for this key — create one so the answer is persisted
+            await prisma.applicationAnswer.create({ data: { applicationId: id, questionKey: a.key, questionText: a.key, answerText: a.answer, isApproved: true, answeredBy: 'user' } });
+          }
         }
+        await prisma.applicationEvent.create({ data: { applicationId: id, eventType: 'ANSWERS_EDITED', eventData: { keys: parsed.data.answers.map(a => a.key) } } });
         return { ok: true, updated: parsed.data.answers.length };
       } catch {}
     }

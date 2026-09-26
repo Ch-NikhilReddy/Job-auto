@@ -88,6 +88,7 @@ export default function App() {
   const [matchLoading, setMatchLoading] = useState(false);
   const [prepared, setPrepared] = useState<any>(null);
   const [approvalPkg, setApprovalPkg] = useState<any>(null);
+  const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -429,7 +430,11 @@ export default function App() {
                     {a.status === 'APPROVAL_REQUIRED' && (
                       <button onClick={async () => {
                         const r = await fetch(`${API_URL}/applications/${a.id}/approve`, { method: 'POST' });
-                        if (r.ok) { const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []); }
+                        if (r.ok) {
+                          const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
+                          const c = await fetch(`${API_URL}/applications/${a.id}/check`); const cj = await c.json();
+                          setApprovalPkg({ ...cj, appId: a.id, isCheck: true });
+                        }
                       }} className="rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-slate-950">✓ APPROVE</button>
                     )}
                     {a.status === 'APPROVED' && (
@@ -450,10 +455,20 @@ export default function App() {
                       <div className="font-bold text-white">{approvalPkg.isCheck ? 'Submit Check — Safe Criteria' : `Approval Package — ${approvalPkg.job.company} — ${approvalPkg.job.title}`}</div>
                       {approvalPkg.isCheck ? (
                         <>
-                          <div className={`mt-2 font-bold ${approvalPkg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{approvalPkg.ok ? '✓ PASS — can submit after APPROVE' : '⛔ BLOCKED'}</div>
+                          <div className={`mt-2 font-bold ${approvalPkg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{approvalPkg.ok ? '✓ PASS — ready to submit' : '⛔ BLOCKED'}</div>
                           {approvalPkg.checks?.map((c:any, i:number) => (
                             <div key={i} className={`mt-1 rounded p-2 border text-[11px] ${c.passed ? 'border-emerald-800 bg-emerald-950/20' : c.blocker ? 'border-red-800 bg-red-950/30' : 'border-slate-700'}`}>{c.passed ? '✓' : c.blocker ? '⛔' : '○'} {c.reason}</div>
                           ))}
+                          {!approvalPkg.ok && (
+                            <div className="mt-2 rounded-lg border border-amber-700 bg-amber-950/30 p-2 text-amber-200">
+                              <div className="font-semibold">How to unblock:</div>
+                              <div className="mt-1">
+                                {approvalPkg.checks?.some((c:any)=>c.reason.includes('UNKNOWN')) && <>1. Click <b>View Approval Package</b> → type your answer in the ⚠️ flagged field → <b>Save answer</b>. <br/></>}
+                                {approvalPkg.checks?.some((c:any)=>c.reason.includes('APPROVED')) && <>2. Click <b>✓ APPROVE</b> to grant human approval. <br/></>}
+                                3. Then click <b>Check Submit</b> again.
+                              </div>
+                            </div>
+                          )}
                         </>
                       ) : (
                         <>
@@ -461,7 +476,29 @@ export default function App() {
                           {approvalPkg.answers?.map((ans:any) => (
                             <div key={ans.key} className={`mt-2 rounded-lg p-3 border ${ans.needsUser ? 'border-amber-700 bg-amber-950/30' : 'border-emerald-800 bg-emerald-950/20'}`}>
                               <div className="font-semibold">{ans.question} {ans.needsUser && <span className="text-amber-400">⚠️ FLAG FOR USER</span>}</div>
-                              <div className="mt-1 text-slate-300">{ans.answer || <span className="text-slate-500">— empty (needs your input) —</span>}</div>
+                              {ans.needsUser ? (
+                                <div className="mt-2">
+                                  <textarea
+                                    value={answerDrafts[ans.key] ?? ''}
+                                    onChange={(e) => setAnswerDrafts((p) => ({ ...p, [ans.key]: e.target.value }))}
+                                    placeholder="Type your answer here — the agent will never guess this for you"
+                                    className="w-full rounded-lg border border-amber-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 outline-none placeholder:text-slate-600"
+                                    rows={2}
+                                  />
+                                  <button onClick={async () => {
+                                    const val = (answerDrafts[ans.key] ?? '').trim();
+                                    if (!val) return alert('Enter an answer first');
+                                    const r = await fetch(`${API_URL}/applications/${a.id}/answers`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: [{ key: ans.key, answer: val }] }) });
+                                    if (r.ok) {
+                                      setAnswerDrafts((p) => { const n = { ...p }; delete n[ans.key]; return n; });
+                                      const c = await fetch(`${API_URL}/applications/${a.id}/check`); const cj = await c.json();
+                                      setApprovalPkg((p: any) => ({ ...p, ...cj, appId: a.id, isCheck: true }));
+                                    }
+                                  }} className="mt-1 rounded-md bg-amber-500 px-3 py-1 text-[11px] font-semibold text-slate-950">Save answer</button>
+                                </div>
+                              ) : (
+                                <div className="mt-1 text-slate-300">{ans.answer || <span className="text-slate-500">— empty (needs your input) —</span>}</div>
+                              )}
                               <div className="mt-1 text-[10px] text-slate-500">Source: {ans.source} • {ans.reason ?? ''}</div>
                             </div>
                           ))}
