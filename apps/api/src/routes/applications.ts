@@ -234,12 +234,28 @@ export async function applicationRoutes(app: FastifyInstance) {
         return { ok: false, error: 'SUBMIT_BLOCKED', checks, job: { title: job.title, company: job.companyName }, application: { id: application.id, status: application.status }, message: 'Blocked by safe criteria — fix blockers and ensure APPROVED status before submit. Use human approval workflow (§6 Mode B).' };
       }
       const prisma = getPrisma()!;
-      // Simulate permitted submission: mark APPLIED (real browser automation would run here per §20)
-      // Per §3: only via permitted mechanism — currently link-out/manual for most sources, so we record as APPLIED with applicationUrl
-      const updated = await prisma.application.update({ where: { id }, data: { status: 'APPLIED', applicationUrl: (job as any).sourceUrl ?? null } });
-      await prisma.applicationEvent.create({ data: { applicationId: id, eventType: 'APPLIED', eventData: { via: 'permitted-executor', checks } as any } });
-      await prisma.notification.create({ data: { userId: (application as any).userId, type: 'application_submitted', channel: 'dashboard', title: `Applied: ${job.title} at ${job.companyName}`, message: `Application ${id} submitted via permitted mechanism`, payload: { jobId: (job as any).id } as any } }).catch(()=>{});
-      return { ok: true, application: updated, checks, message: 'Application marked APPLIED — for non-API sources, open applicationUrl to complete manual step if needed.' };
+      // §12 TRUTHFULNESS: no connector currently has a permitted submit API, so we DO NOT
+      // claim the application was sent. We mark it READY_TO_SEND (link_out) and require the
+      // user to actually apply on the company site, then confirm with evidence.
+      const updated = await prisma.application.update({
+        where: { id },
+        data: {
+          status: 'APPLYING',
+          submissionMethod: 'link_out',
+          applicationUrl: (job as any).sourceUrl ?? null,
+        },
+      });
+      await prisma.applicationEvent.create({ data: { applicationId: id, eventType: 'READY_TO_SEND', eventData: { submissionMethod: 'link_out', checks, note: 'Approved + passed safe criteria. NOT yet sent to the company.' } as any } });
+      await prisma.notification.create({ data: { userId: (application as any).userId, type: 'action_required', channel: 'dashboard', title: `Apply now: ${job.title} at ${job.companyName}`, message: 'Approved and safe. Open the application link, submit on the company site, then mark Verified with your confirmation evidence.', payload: { jobId: (job as any).id, url: (job as any).sourceUrl } as any } }).catch(()=>{});
+      return {
+        ok: true,
+        application: updated,
+        checks,
+        submissionMethod: 'link_out',
+        verified: false,
+        message: 'Approved and passed all safe checks. This agent did NOT submit for you — no permitted API exists for this source. Open the application link, submit on the company site, then use "Mark Verified" with your confirmation reference.',
+        nextStep: `Open ${(job as any).sourceUrl ?? 'the job URL'}, submit the tailored resume/cover, then record the confirmation email reference.`,
+      };
     } catch (e: any) {
       reply.code(400);
       return { error: e.message };
@@ -254,6 +270,87 @@ export async function applicationRoutes(app: FastifyInstance) {
       const { canAutoSubmit } = await import('../services/applicationExecutor.js');
       const result = await canAutoSubmit(id);
       return { ok: result.ok, checks: result.checks, job: { title: result.job.title, company: result.job.companyName }, application: { id: result.application.id, status: result.application.status } };
+    } catch (e: any) {
+      reply.code(404); return { error: e.message };
+    }
+  });
+
+  // POST /applications/:id/verify — §15 cross-verification with real evidence
+  app.post('/applications/:id/verify', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = z.object({
+      method: z.enum(['confirmation_email', 'ats_portal', 'recruiter_call', 'offer_letter']),
+      confirmationRef: z.string().min(3).optional(),
+      note: z.string().min(3),
+      companyName: z.string().optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: 'Invalid verification', details: parsed.error.flatten() }; }
+    if (!isDbEnabled()) { reply.code(503); return { error: 'DB required' }; }
+    try {
+      const prisma = getPrisma()!;
+      const row = await prisma.application.findUnique({ where: { id }, include: { job: true } });
+      if (!row) { reply.code(404); return { error: 'Application not found' }; }
+
+      // Fraud check §35: confirmation ref/email must relate to this company
+      const warnings: string[] = [];
+      if (parsed.data.confirmationRef && !/\d{3,}/.test(parsed.data.confirmationRef)) {
+        warnings.push('Confirmation reference has no numeric ID — double-check it came from the company, not a third party.');
+      }
+      if (parsed.data.confirmationRef && /example\.com|test\.com|localhost/i.test(parsed.data.confirmationRef)) {
+        reply.code(422);
+        return { error: 'SUSPICIOUS_REFERENCE', message: 'Reference points to a placeholder/test domain — not accepted as verification.' };
+      }
+
+      const updated = await prisma.application.update({
+        where: { id },
+        data: {
+          status: 'APPLIED',
+          submissionMethod: 'manual_confirmed',
+          verifiedAt: new Date(),
+          verificationMethod: parsed.data.method,
+          verificationNote: parsed.data.note,
+          confirmationRef: parsed.data.confirmationRef,
+          submittedAt: (row as any).submittedAt ?? new Date(),
+        },
+      });
+      await prisma.applicationEvent.create({ data: { applicationId: id, eventType: 'VERIFIED', eventData: { method: parsed.data.method, ref: parsed.data.confirmationRef, warnings } as any } });
+      await prisma.notification.create({ data: { userId: (row as any).userId, type: 'application_verified', channel: 'dashboard', title: `Verified: ${(row as any).job.title} at ${(row as any).job.companyName}`, message: 'Application confirmed received with evidence.', payload: { appId: id } as any } }).catch(()=>{});
+      return { ok: true, application: updated, verified: true, warnings, message: 'Marked APPLIED + VERIFIED with your evidence.' };
+    } catch (e: any) {
+      reply.code(400); return { error: e.message };
+    }
+  });
+
+  // GET /applications/:id/verify-guide — what evidence counts as proof (§15)
+  app.get('/applications/:id/verify-guide', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!isDbEnabled()) { reply.code(503); return { error: 'DB required' }; }
+    try {
+      const prisma = getPrisma()!;
+      const row = await prisma.application.findUnique({ where: { id }, include: { job: true, documents: true } });
+      if (!row) { reply.code(404); return { error: 'Application not found' }; }
+      const job = (row as any).job;
+      const docs = (row as any).documents ?? [];
+      return {
+        job: { title: job.title, company: job.companyName, url: (job as any).sourceUrl },
+        status: (row as any).status,
+        submissionMethod: (row as any).submissionMethod,
+        verifiedAt: (row as any).verifiedAt,
+        documents: docs.map((d: any) => ({ type: d.documentType, fileName: d.fileName })),
+        acceptedEvidence: [
+          { method: 'confirmation_email', label: 'Confirmation email from the company', how: 'Check the sender domain matches the company website (e.g. @company.com), not a random domain. Copy the application ID from the email.' },
+          { method: 'ats_portal', label: 'ATS portal shows your application', how: 'Log in to the company portal (Greenhouse/Lever/Naukri profile) and confirm the role shows "Applied".' },
+          { method: 'recruiter_call', label: 'Recruiter confirmed by call/chat', how: 'Note the recruiter name and date. Save their email/LinkedIn.' },
+          { method: 'offer_letter', label: 'Offer or interview invite received', how: 'Strongest proof. Attach the invite date.' },
+        ],
+        redFlags: [
+          'Confirmation from a domain unrelated to the company',
+          'No application ID or reference number',
+          'Generic "we have your resume" from a no-reply marketing address',
+          'Portal shows "Applied" but no confirmation email arrived',
+        ],
+        agentLimitation: 'This agent has no permitted submit API for this source — it cannot confirm submission on your behalf. Only your evidence can mark it verified.',
+      };
     } catch (e: any) {
       reply.code(404); return { error: e.message };
     }

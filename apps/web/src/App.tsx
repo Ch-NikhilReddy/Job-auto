@@ -89,6 +89,7 @@ export default function App() {
   const [prepared, setPrepared] = useState<any>(null);
   const [approvalPkg, setApprovalPkg] = useState<any>(null);
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
+  const [verifyForm, setVerifyForm] = useState({ method: 'confirmation_email', confirmationRef: '', note: '' });
 
   useEffect(() => {
     const loadDashboard = async () => {
@@ -416,8 +417,19 @@ export default function App() {
                 <div key={a.id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between">
                     <div><div className="font-semibold">{a.title ?? a.job?.title} — {a.company ?? a.job?.companyName}</div><div className="text-xs text-slate-500">{a.jobId} • {new Date(a.createdAt ?? a.firstSeenAt).toLocaleDateString()}</div></div>
-                    <span className="mt-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs text-violet-300 md:mt-0">{a.status}</span>
+                    <span className="mt-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs text-violet-300 md:mt-0">{a.status}{a.submissionMethod === 'link_out' ? ' · link_out' : ''}</span>
                   </div>
+                  {!a.verifiedAt && (a.status === 'APPLYING' || a.submissionMethod === 'link_out') && (
+                    <div className="mt-2 rounded-lg border border-amber-700 bg-amber-950/30 p-2 text-[11px] text-amber-200">
+                      ⚠️ <b>Not sent yet.</b> This agent has no permitted submit API for this source — it prepared and approved your application, but <b>you</b> must submit on the company site, then use “Verify / Cross-check” to record proof.
+                    </div>
+                  )}
+                  {a.verificationNote && (
+                    <div className="mt-2 rounded-lg border border-emerald-800 bg-emerald-950/20 p-2 text-[11px] text-emerald-200">
+                      <div className="font-semibold">Evidence: {a.verificationMethod}{a.confirmationRef ? ` • ref ${a.confirmationRef}` : ''}</div>
+                      <div className="text-slate-300">{a.verificationNote}</div>
+                    </div>
+                  )}
                   {a.events && <div className="mt-2 text-xs text-slate-400">History: {a.events.map((e: any) => e.type ?? e.eventType).join(' → ')}</div>}
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button onClick={async () => {
@@ -442,8 +454,20 @@ export default function App() {
                         const r = await fetch(`${API_URL}/applications/${a.id}/submit`, { method: 'POST' });
                         const j = await r.json();
                         if (!r.ok) { setApprovalPkg({ ...j, appId: a.id, isCheck: true }); alert('Submit blocked: ' + (j.checks?.filter((c:any)=>c.blocker && !c.passed).map((c:any)=>c.reason).join(' | ') ?? j.error)); }
-                        else { const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []); }
-                      }} className="rounded-md bg-cyan-500 px-3 py-1 text-xs font-semibold text-slate-950">→ SUBMIT (permitted)</button>
+                        else {
+                          const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
+                          alert(j.message);
+                        }
+                      }} className="rounded-md bg-cyan-500 px-3 py-1 text-xs font-semibold text-slate-950">→ Mark Ready to Send</button>
+                    )}
+                    {(!a.verifiedAt && (a.status === 'APPLYING' || a.submissionMethod === 'link_out')) && (
+                      <button onClick={async () => {
+                        const r = await fetch(`${API_URL}/applications/${a.id}/verify-guide`);
+                        if (r.ok) { const j = await r.json(); setApprovalPkg({ ...j, appId: a.id, isVerify: true }); }
+                      }} className="rounded-md border border-emerald-700 bg-emerald-950 px-3 py-1 text-xs text-emerald-300">✓ Verify / Cross-check</button>
+                    )}
+                    {a.verifiedAt && (
+                      <span className="rounded-md border border-emerald-600 bg-emerald-900/50 px-3 py-1 text-xs font-semibold text-emerald-300">🔗 VERIFIED {new Date(a.verifiedAt).toLocaleDateString()}</span>
                     )}
                     <button onClick={async () => {
                       const r = await fetch(`${API_URL}/applications/${a.id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'WITHDRAWN', note: 'Skipped by user' }) });
@@ -451,9 +475,44 @@ export default function App() {
                     }} className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-300">SKIP</button>
                   </div>
                   {approvalPkg?.appId === a.id && (
-                    <div className={`mt-3 rounded-xl border p-4 text-xs ${approvalPkg.isCheck ? 'border-cyan-800 bg-cyan-950/20' : 'border-slate-700 bg-slate-900'}`}>
-                      <div className="font-bold text-white">{approvalPkg.isCheck ? 'Submit Check — Safe Criteria' : `Approval Package — ${approvalPkg.job.company} — ${approvalPkg.job.title}`}</div>
-                      {approvalPkg.isCheck ? (
+                    <div className={`mt-3 rounded-xl border p-4 text-xs ${approvalPkg.isCheck ? 'border-cyan-800 bg-cyan-950/20' : approvalPkg.isVerify ? 'border-emerald-800 bg-emerald-950/20' : 'border-slate-700 bg-slate-900'}`}>
+                      <div className="font-bold text-white">
+                        {approvalPkg.isCheck ? 'Submit Check — Safe Criteria'
+                          : approvalPkg.isVerify ? `Cross-verification — ${approvalPkg.job.company}`
+                          : `Approval Package — ${approvalPkg.job.company} — ${approvalPkg.job.title}`}
+                      </div>
+                      {approvalPkg.isVerify ? (
+                        <>
+                          <div className="mt-2 rounded-lg border border-amber-700 bg-amber-950/30 p-2 text-amber-200">{approvalPkg.agentLimitation}</div>
+                          <div className="mt-2 text-slate-400">Job URL: <a className="text-cyan-400 underline" href={approvalPkg.job.url} target="_blank" rel="noreferrer">{approvalPkg.job.url ?? 'n/a'}</a></div>
+                          <div className="mt-2 font-semibold text-white">Accepted proof:</div>
+                          {approvalPkg.acceptedEvidence?.map((e: any) => (
+                            <div key={e.method} className="mt-1 rounded border border-slate-700 bg-slate-900 p-2">
+                              <div className="font-semibold text-emerald-300">{e.label}</div>
+                              <div className="text-slate-400">{e.how}</div>
+                            </div>
+                          ))}
+                          <div className="mt-2 font-semibold text-red-300">Red flags (fake/no-reply confirmations):</div>
+                          <ul className="mt-1 list-disc pl-4 text-slate-400">{approvalPkg.redFlags?.map((r: any) => <li key={r}>{r}</li>)}</ul>
+                          <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900 p-3">
+                            <div className="font-semibold text-white">Record your proof</div>
+                            <select value={verifyForm.method} onChange={(e) => setVerifyForm({ ...verifyForm, method: e.target.value })} className="mt-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs">
+                              {approvalPkg.acceptedEvidence?.map((e: any) => <option key={e.method} value={e.method}>{e.label}</option>)}
+                            </select>
+                            <input value={verifyForm.confirmationRef} onChange={(e) => setVerifyForm({ ...verifyForm, confirmationRef: e.target.value })} placeholder="Confirmation / application ID (e.g. ACC-12345)" className="mt-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs" />
+                            <textarea value={verifyForm.note} onChange={(e) => setVerifyForm({ ...verifyForm, note: e.target.value })} placeholder="Note: sender domain, date received, portal status…" rows={2} className="mt-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs" />
+                            <button onClick={async () => {
+                              if (!verifyForm.note.trim()) return alert('Add a short note about the proof');
+                              const r = await fetch(`${API_URL}/applications/${a.id}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(verifyForm) });
+                              const j = await r.json();
+                              if (!r.ok) return alert(j.error + ': ' + (j.message ?? ''));
+                              setVerifyForm({ method: 'confirmation_email', confirmationRef: '', note: '' });
+                              setApprovalPkg(null);
+                              const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
+                            }} className="mt-2 rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-slate-950">Mark Verified</button>
+                          </div>
+                        </>
+                      ) : approvalPkg.isCheck ? (
                         <>
                           <div className={`mt-2 font-bold ${approvalPkg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{approvalPkg.ok ? '✓ PASS — ready to submit' : '⛔ BLOCKED'}</div>
                           {approvalPkg.checks?.map((c:any, i:number) => (

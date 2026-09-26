@@ -184,6 +184,14 @@ model Application {
   status         String    @default("DISCOVERED") // DISCOVERED → MATCHED → READY → APPROVAL_REQUIRED → APPROVED → APPLYING → APPLIED → ASSESSMENT → INTERVIEW → OFFER → REJECTED → WITHDRAWN
   applicationUrl String?
   submittedAt    DateTime?
+  // §12 truthfulness: how the application was ACTUALLY sent
+  // none = nothing sent | link_out = user must apply on company site | api = sent via permitted API | manual_confirmed = user applied by hand and confirmed
+  submissionMethod String   @default("none")
+  // §11/§15 cross-verification — evidence the company really received it
+  verifiedAt         DateTime?
+  verificationMethod String? // confirmation_email | ats_portal | recruiter_call | offer_letter
+  verificationNote   String?  @db.Text
+  confirmationRef    String? // application ID from the confirmation email
   approvedAt     DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -195,6 +203,7 @@ model Application {
 
   @@unique([userId, jobId])
   @@index([status])
+  @@index([verifiedAt])
   @@map("applications")
 }
 
