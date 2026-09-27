@@ -1,10 +1,9 @@
 import type { JobSourceAdapter, AdapterResult } from './types.js';
 import { seededJobs } from '../data/jobs.js';
+import { realAdapters } from './realAdapters.js';
 
-// Greenhouse is the only adapter enabled for real discovery in Phase 2
-// Others are discovery/link-out stubs per §3 (ToS-safe). Greenhouse uses public board pattern.
-// Phase 2: uses seededJobs as mock Greenhouse feed; replace with fetch('https://boards-api.greenhouse.io/v1/boards/{board}/jobs') when boards are configured.
-
+// Greenhouse mock adapter kept for local/offline demo of the pipeline.
+// In production `realAdapters` (live public APIs) takes precedence — see index below.
 export const greenhouseAdapter: JobSourceAdapter = {
   name: 'Greenhouse',
   capabilities: { search: true, fetchDetails: true, supportsApply: false },
@@ -50,4 +49,8 @@ export const stubAdapters: JobSourceAdapter[] = [
   },
 ];
 
-export const allAdapters: JobSourceAdapter[] = [greenhouseAdapter, ...stubAdapters];
+// Use LIVE public APIs when enabled (default). Set USE_MOCK_SOURCES=true for offline demos.
+const useReal = process.env.USE_MOCK_SOURCES !== 'true';
+export const allAdapters: JobSourceAdapter[] = useReal
+  ? [...realAdapters, ...stubAdapters]
+  : [greenhouseAdapter, ...stubAdapters];

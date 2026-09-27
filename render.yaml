@@ -23,6 +23,10 @@ services:
         value: "2"
       - key: AUTO_APPLY_SWEEP_CRON
         value: "0 */2 * * *"
+      - key: USE_MOCK_SOURCES
+        value: "false"
+      - key: SOURCE_TIMEOUT_MS
+        value: "20000"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
