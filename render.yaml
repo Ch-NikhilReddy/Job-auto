@@ -2,7 +2,7 @@ services:
   - type: web
     name: careerpilot-api
     runtime: docker
-    dockerfilePath: ./apps/api/Dockerfile
+    dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: starter
     healthCheckPath: /health
@@ -11,6 +11,18 @@ services:
         value: production
       - key: APP_PORT
         value: 4000
+      - key: PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+        value: /usr/bin/chromium
+      - key: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
+        value: "1"
+      - key: AUTO_APPLY_DOMAINS
+        value: boards.greenhouse.io,jobs.lever.co,jobs.ashbyhq.com,apply.workable.com,jobs.smartrecruiters.com,wellfound.com,internshala.com
+      - key: AUTO_APPLY_DAILY_LIMIT
+        value: "20"
+      - key: AUTO_APPLY_CONCURRENCY
+        value: "2"
+      - key: AUTO_APPLY_SWEEP_CRON
+        value: "0 */2 * * *"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
@@ -27,5 +39,3 @@ services:
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: VITE_API_URL
-        sync: false
