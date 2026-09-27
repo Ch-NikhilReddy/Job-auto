@@ -31,4 +31,8 @@ COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/apps/api/generated ./apps/api/generated
 EXPOSE 4000
-CMD ["sh", "-c", "npx prisma migrate deploy && node apps/api/dist/server.js"]
+ENV PORT=4000
+ENV APP_PORT=4000
+# Do not gate startup on migrations — the app DATABASE_URL is the pgbouncer
+# transaction pooler, which Prisma migrations cannot use (session mode required).
+CMD ["node", "apps/api/dist/server.js"]

@@ -32,4 +32,9 @@ COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder /app/prisma ./prisma
 RUN mkdir -p /app/apps/api/generated
 EXPOSE 4000
-CMD ["sh", "-c", "npx prisma migrate deploy && node apps/api/dist/server.js"]
+# NOTE: do NOT gate startup on `prisma migrate deploy`.
+# DATABASE_URL points at the pgbouncer transaction pooler (port 6543), which Prisma
+# migrations cannot use (they need session mode). Migrations are run separately;
+# the API tolerates a missing schema at boot and the DB is already migrated.
+ENV PORT=4000
+CMD ["node", "apps/api/dist/server.js"]

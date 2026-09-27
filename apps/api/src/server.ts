@@ -40,9 +40,11 @@ async function buildServer() {
 
 const server = await buildServer();
 
+const listenPort = Number(process.env.PORT ?? appConfig.port ?? 4000);
+
 try {
-  await server.listen({ port: appConfig.port, host: '0.0.0.0' });
-  console.log(`CareerPilot API listening on http://localhost:${appConfig.port}`);
+  await server.listen({ port: listenPort, host: '0.0.0.0' });
+  console.log(`CareerPilot API listening on http://0.0.0.0:${listenPort} (PORT=${process.env.PORT ?? 'unset'})`);
 } catch (error) {
   server.log.error(error);
   process.exit(1);
