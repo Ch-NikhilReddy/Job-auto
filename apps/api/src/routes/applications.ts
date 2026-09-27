@@ -275,6 +275,29 @@ export async function applicationRoutes(app: FastifyInstance) {
     }
   });
 
+  // POST /applications/:id/auto-apply — zero-touch single apply (queues browser worker)
+  app.post('/applications/:id/auto-apply', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!isDbEnabled()) { reply.code(503); return { error: 'DB required' }; }
+    try {
+      const { canAutoSubmit } = await import('../services/applicationExecutor.js');
+      const { ok, checks, job, application } = await canAutoSubmit(id);
+      if (!ok) {
+        reply.code(422);
+        return { ok: false, error: 'AUTO_APPLY_BLOCKED', checks, job: { title: job.title, company: job.companyName }, application: { id: application.id, status: application.status }, message: 'Blocked by safe criteria. Answer flagged questions and APPROVE first.' };
+      }
+      const { enqueueAutoApply, startAutoApplyWorker } = await import('../workers/autoApplyWorker.js');
+      startAutoApplyWorker();
+      const prisma = getPrisma()!;
+      await prisma.application.update({ where: { id }, data: { status: 'APPLYING', submissionMethod: 'browser_automated' } });
+      const r = await enqueueAutoApply(id);
+      if (!r.queued) { reply.code(503); return { ok: false, error: 'Queue unavailable', hint: 'REDIS_URL must be set on the host' }; }
+      return { ok: true, queued: true, jobId: r.jobId, message: 'Queued for auto-apply. You will be notified on submit, CAPTCHA block, or failure.' };
+    } catch (e: any) {
+      reply.code(400); return { error: e.message };
+    }
+  });
+
   // POST /applications/:id/verify — §15 cross-verification with real evidence
   app.post('/applications/:id/verify', async (req, reply) => {
     const { id } = req.params as { id: string };

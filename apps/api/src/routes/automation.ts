@@ -88,7 +88,34 @@ export async function automationRoutes(app: FastifyInstance) {
     return { ok: true, mode: 'inline', interval, nextRunAt };
   });
 
-  // POST /automation/emergency-stop — per §32
+  // POST /automation/auto-apply/run — zero-touch sweep of all APPROVED applications
+  app.post('/automation/auto-apply/run', async (req) => {
+    const { sweepAutoApply, startAutoApplyWorker } = await import('../workers/autoApplyWorker.js');
+    const { allowedDomains, isDomainAllowed } = await import('../services/autoApplier.js');
+    const body = (req.body as any) ?? {};
+    startAutoApplyWorker();
+    const result = await sweepAutoApply({ limit: body.limit });
+    return { ok: true, mode: 'AUTO_APPLY', allowedDomains: allowedDomains(), ...result };
+  });
+
+  // GET /automation/auto-apply/domains — show allowlist + check a URL
+  app.get('/automation/auto-apply/domains', async (req) => {
+    const { allowedDomains, isDomainAllowed } = await import('../services/autoApplier.js');
+    const url = (req.query as any)?.url;
+    return { allowedDomains: allowedDomains(), check: url ? isDomainAllowed(url) : undefined, hint: 'Set AUTO_APPLY_DOMAINS=host1.com,host2.com in Render env to approve hosts.' };
+  });
+
+  // POST /automation/auto-apply/one — apply a single application now
+  app.post('/automation/auto-apply/one/:id', async (req) => {
+    const { id } = req.params as { id: string };
+    const { enqueueAutoApply, startAutoApplyWorker } = await import('../workers/autoApplyWorker.js');
+    startAutoApplyWorker();
+    const r = await enqueueAutoApply(id);
+    if (!r.queued) return { ok: false, error: 'Queue unavailable', hint: 'REDIS_URL must be set' };
+    return { ok: true, queued: true, jobId: r.jobId };
+  });
+
+  // GET /automation/emergency-stop — per §32
   app.post('/automation/emergency-stop', async () => {
     if (inlineInterval) clearInterval(inlineInterval);
     nextRunAt = null;

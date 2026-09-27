@@ -10,12 +10,19 @@ import { automationRoutes } from './routes/automation.js';
 import { documentRoutes } from './routes/documents.js';
 import { timelineRoutes } from './routes/timeline.js';
 
+import { startDiscoveryWorker } from './workers/discoveryWorker.js';
+import { startAutoApplyWorker } from './workers/autoApplyWorker.js';
+
 async function buildServer() {
   const app = Fastify({ logger: appConfig.env !== 'production' });
 
   await app.register(cors, {
     origin: true,
   });
+
+  // Start background workers in-process (cloud: this service stays alive 24/7)
+  startDiscoveryWorker();
+  startAutoApplyWorker();
 
   app.register(async (instance) => {
     await healthRoutes(instance);
