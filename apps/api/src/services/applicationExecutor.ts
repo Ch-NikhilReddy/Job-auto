@@ -21,8 +21,9 @@ export function checkSafeCriteria(c: SafeCriteria): SubmitCheck[] {
   const locOk = /hyderabad|remote|bengaluru/i.test(c.job.location) || c.job.workMode === 'remote';
   checks.push({ passed: locOk, reason: locOk ? `Location ok: ${c.job.location}` : `Location mismatch: ${c.job.location}`, blocker: !locOk });
 
-  // 3. No mandatory experience >1 year
-  const expMatch = c.job.description.match(/(\d+)\+?\s*years/i);
+  // 3. No mandatory experience >1 year (handles "3+ years", "3 years of experience", "3 yrs exp")
+  const expMatch = c.job.description.match(/(\d+)\s*\+?\s*(?:years?|yrs?)(?:\s+of)?\s*(?:experience|exp|background)/i)
+    ?? c.job.description.match(/(\d+)\s*\+?\s*(?:years?|yrs?)/i);
   const expYears = expMatch ? parseInt(expMatch[1], 10) : 0;
   const expOk = isNaN(expYears) || expYears <= 1;
   checks.push({ passed: expOk, reason: expOk ? 'Experience ≤1 year' : `Requires ${expYears}+ years`, blocker: !expOk });

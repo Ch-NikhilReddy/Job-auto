@@ -3,6 +3,16 @@ import type { DashboardData } from './types';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:4000';
 
+const API_KEY = (import.meta as any).env?.VITE_API_KEY ?? '';
+
+// Single helper so the X-API-Key header is attached to every call.
+async function api(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers: Record<string, string> = { ...((init.headers as Record<string, string>) ?? {}) };
+  if (API_KEY) headers['X-API-Key'] = API_KEY;
+  if (init.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  return fetch(`${API_URL}${path}`, { ...init, headers });
+}
+
 const initialData: DashboardData = {
   profile: {
     fullName: 'Nikhil Reddy Chittepu',
@@ -95,8 +105,8 @@ export default function App() {
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        const response = await fetch(`${API_URL}/jobs?query=${encodeURIComponent(query)}&employmentType=${encodeURIComponent(employmentType === 'all' ? '' : employmentType)}&workMode=${encodeURIComponent(workMode === 'all' ? '' : workMode)}`);
-        const jobsResponse = await fetch(`${API_URL}/dashboard`);
+        const response = await api(`/jobs?query=${encodeURIComponent(query)}&employmentType=${encodeURIComponent(employmentType === 'all' ? '' : employmentType)}&workMode=${encodeURIComponent(workMode === 'all' ? '' : workMode)}`);
+        const jobsResponse = await api(`/dashboard`);
         if (!response.ok || !jobsResponse.ok) {
           throw new Error('Unable to load dashboard');
         }
@@ -131,7 +141,7 @@ export default function App() {
   useEffect(() => {
     const loadApps = async () => {
       try {
-        const r = await fetch(`${API_URL}/applications`);
+        const r = await api(`/applications`);
         if (r.ok) { const j = await r.json(); setApplications(j.applications ?? []); }
       } catch {}
     };
@@ -141,7 +151,7 @@ export default function App() {
   useEffect(() => {
     const loadNotifs = async () => {
       try {
-        const r = await fetch(`${API_URL}/notifications`);
+        const r = await api(`/notifications`);
         if (r.ok) { const j = await r.json(); if (j.notifications?.length) setLiveNotifications(j.notifications); }
       } catch {}
     };
@@ -198,7 +208,7 @@ export default function App() {
               <input value={manualForm.location} onChange={e => setManualForm({ ...manualForm, location: e.target.value })} placeholder="Location" className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm" />
               <button onClick={async () => {
                 if (!manualForm.title || !manualForm.company) return alert('Title and Company required');
-                const r = await fetch(`${API_URL}/jobs/manual-import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...manualForm, skills: [], workMode: 'hybrid', employmentType: 'internship' }) });
+                const r = await api(`/jobs/manual-import`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...manualForm, skills: [], workMode: 'hybrid', employmentType: 'internship' }) });
                 const j = await r.json();
                 if (!r.ok) alert(j.error + (j.existingId ? ` (${j.existingId})` : ''));
                 else { setManualForm({ title: '', company: '', location: 'Hyderabad', description: '' }); setShowManual(false); location.reload(); }
@@ -264,27 +274,27 @@ export default function App() {
                     <button onClick={async () => {
                       setMatchLoading(true);
                       try {
-                        const r = await fetch(`${API_URL}/jobs/${job.id}/match`);
+                        const r = await api(`/jobs/${job.id}/match`);
                         const j = await r.json();
                         setSelectedMatch(j.match ? { ...j, jobId: job.id } : j);
                       } catch { alert('Match fetch failed'); }
                       setMatchLoading(false);
                     }} className="rounded-md border border-cyan-700 bg-cyan-950 px-3 py-1 text-xs text-cyan-300 hover:bg-cyan-900">{matchLoading && selectedMatch?.jobId === job.id ? 'Analyzing…' : '🔍 Analyze Match'}</button>
                     <button onClick={async () => {
-                      const r = await fetch(`${API_URL}/jobs/${job.id}/save`, { method: 'POST' });
+                      const r = await api(`/jobs/${job.id}/save`, { method: 'POST' });
                       const j = await r.json();
                       setSavedIds(prev => { const n = new Set(prev); if (j.isSaved) n.add(job.id); else n.delete(job.id); return n; });
                     }} className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1 text-xs text-slate-200 hover:bg-slate-700">{savedIds.has(job.id) ? '★ Saved' : '☆ Save'}</button>
                     <button onClick={async () => {
-                      const r = await fetch(`${API_URL}/jobs/${job.id}/prepare`, { method: 'POST' });
+                      const r = await api(`/jobs/${job.id}/prepare`, { method: 'POST' });
                       const j = await r.json();
                       setPrepared({ ...j, jobId: job.id });
                       if (!r.ok && j.error === 'QA_BLOCKED') alert('QA Blocked: ' + j.qa.blockers.join(' | '));
                     }} className="rounded-md border border-violet-700 bg-violet-950 px-3 py-1 text-xs text-violet-300 hover:bg-violet-900">Tailor Resume + Cover</button>
                     <button onClick={async () => {
-                      const r = await fetch(`${API_URL}/applications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: job.id, company: job.company, title: job.title }) });
+                      const r = await api(`/applications`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jobId: job.id, company: job.company, title: job.title }) });
                       const j = await r.json();
-                      if (!r.ok) alert(j.error); else { const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []); }
+                      if (!r.ok) alert(j.error); else { const r2 = await api(`/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []); }
                     }} className="rounded-md bg-cyan-500 px-3 py-1 text-xs font-semibold text-slate-950 hover:bg-cyan-400">Prepare Application</button>
                   </div>
                   {selectedMatch?.jobId === job.id && selectedMatch.match && (
@@ -362,10 +372,10 @@ export default function App() {
                 <div className="text-xs font-semibold uppercase tracking-wider text-cyan-300">⚡ Zero-touch Auto-Apply</div>
                 <p className="mt-1 text-[11px] text-slate-400">Agent opens the form, fills your verified details, uploads your tailored resume, and submits. It stops only at CAPTCHA/login and notifies you.</p>
                 <button onClick={async () => {
-                  const r = await fetch(`${API_URL}/automation/auto-apply/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 20 }) });
+                  const r = await api(`/automation/auto-apply/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 20 }) });
                   const j = await r.json();
                   setAutoApply(j);
-                  const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
+                  const r2 = await api(`/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
                 }} className="mt-2 w-full rounded-md bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400">▶ Run auto-apply sweep now</button>
                 {autoApply && (
                   <div className="mt-2 space-y-1 text-[11px]">
@@ -417,7 +427,7 @@ export default function App() {
                 <li key={n.id ?? i} className={`rounded-lg border p-3 ${n.isRead===false ? 'border-cyan-800 bg-cyan-950/20' : 'border-slate-800 bg-slate-950'}`}>
                   <div className="font-semibold text-white">{n.title ?? n}</div>
                   {n.message && n.message !== n.title && <div className="text-xs text-slate-400">{n.message}</div>}
-                  {n.isRead===false && <button onClick={async()=>{ await fetch(`${API_URL}/notifications/${n.id}/read`, { method: 'PATCH' }); setLiveNotifications(prev=>prev.map(x=> x.id===n.id ? {...x, isRead:true}:x)); }} className="mt-1 text-[10px] text-cyan-400">Mark read</button>}
+                  {n.isRead===false && <button onClick={async()=>{ await api(`/notifications/${n.id}/read`, { method: 'PATCH' }); setLiveNotifications(prev=>prev.map(x=> x.id===n.id ? {...x, isRead:true}:x)); }} className="mt-1 text-[10px] text-cyan-400">Mark read</button>}
                 </li>
               ))}
             </ul>
@@ -453,18 +463,18 @@ export default function App() {
                   {a.events && <div className="mt-2 text-xs text-slate-400">History: {a.events.map((e: any) => e.type ?? e.eventType).join(' → ')}</div>}
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button onClick={async () => {
-                      const r = await fetch(`${API_URL}/applications/${a.id}/prepare`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ questions: [{ key: 'why_interested', text: 'Why are you interested in this role?' }, { key: 'visa', text: 'Do you require visa sponsorship?' }] }) });
+                      const r = await api(`/applications/${a.id}/prepare`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ questions: [{ key: 'why_interested', text: 'Why are you interested in this role?' }, { key: 'visa', text: 'Do you require visa sponsorship?' }] }) });
                       const j = await r.json(); setApprovalPkg({ ...j, appId: a.id });
                     }} className="rounded-md border border-violet-700 bg-violet-950 px-3 py-1 text-xs text-violet-300">View Approval Package</button>
                     <button onClick={async () => {
-                      const r = await fetch(`${API_URL}/applications/${a.id}/check`); const j = await r.json(); setApprovalPkg({ ...j, appId: a.id, isCheck: true });
+                      const r = await api(`/applications/${a.id}/check`); const j = await r.json(); setApprovalPkg({ ...j, appId: a.id, isCheck: true });
                     }} className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-300">Check Submit</button>
                     {a.status === 'APPROVAL_REQUIRED' && (
                       <button onClick={async () => {
-                        const r = await fetch(`${API_URL}/applications/${a.id}/approve`, { method: 'POST' });
+                        const r = await api(`/applications/${a.id}/approve`, { method: 'POST' });
                         if (r.ok) {
-                          const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
-                          const c = await fetch(`${API_URL}/applications/${a.id}/check`); const cj = await c.json();
+                          const r2 = await api(`/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
+                          const c = await api(`/applications/${a.id}/check`); const cj = await c.json();
                           setApprovalPkg({ ...cj, appId: a.id, isCheck: true });
                         }
                       }} className="rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-slate-950">✓ APPROVE</button>
@@ -472,20 +482,20 @@ export default function App() {
                     {a.status === 'APPROVED' && (
                       <>
                       <button onClick={async () => {
-                        const r = await fetch(`${API_URL}/applications/${a.id}/auto-apply`, { method: 'POST' });
+                        const r = await api(`/applications/${a.id}/auto-apply`, { method: 'POST' });
                         const j = await r.json();
                         if (!r.ok) { setApprovalPkg({ ...j, appId: a.id, isCheck: true }); alert('Auto-apply blocked: ' + (j.checks?.filter((c:any)=>c.blocker && !c.passed).map((c:any)=>c.reason).join(' | ') ?? j.error)); }
                         else {
-                          const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
+                          const r2 = await api(`/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
                           alert('Auto-apply queued. You will be notified on submit, CAPTCHA block, or failure.');
                         }
                       }} className="rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-slate-950">⚡ AUTO-APPLY</button>
                       <button onClick={async () => {
-                        const r = await fetch(`${API_URL}/applications/${a.id}/submit`, { method: 'POST' });
+                        const r = await api(`/applications/${a.id}/submit`, { method: 'POST' });
                         const j = await r.json();
                         if (!r.ok) { setApprovalPkg({ ...j, appId: a.id, isCheck: true }); alert('Submit blocked: ' + (j.checks?.filter((c:any)=>c.blocker && !c.passed).map((c:any)=>c.reason).join(' | ') ?? j.error)); }
                         else {
-                          const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
+                          const r2 = await api(`/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
                           alert(j.message);
                         }
                       }} className="rounded-md border border-cyan-700 bg-cyan-950 px-3 py-1 text-xs text-cyan-300">→ Mark Ready to Send</button>
@@ -493,7 +503,7 @@ export default function App() {
                     )}
                     {(!a.verifiedAt && (a.status === 'APPLYING' || a.submissionMethod === 'link_out')) && (
                       <button onClick={async () => {
-                        const r = await fetch(`${API_URL}/applications/${a.id}/verify-guide`);
+                        const r = await api(`/applications/${a.id}/verify-guide`);
                         if (r.ok) { const j = await r.json(); setApprovalPkg({ ...j, appId: a.id, isVerify: true }); }
                       }} className="rounded-md border border-emerald-700 bg-emerald-950 px-3 py-1 text-xs text-emerald-300">✓ Verify / Cross-check</button>
                     )}
@@ -501,8 +511,8 @@ export default function App() {
                       <span className="rounded-md border border-emerald-600 bg-emerald-900/50 px-3 py-1 text-xs font-semibold text-emerald-300">🔗 VERIFIED {new Date(a.verifiedAt).toLocaleDateString()}</span>
                     )}
                     <button onClick={async () => {
-                      const r = await fetch(`${API_URL}/applications/${a.id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'WITHDRAWN', note: 'Skipped by user' }) });
-                      if (r.ok) { const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []); }
+                      const r = await api(`/applications/${a.id}/status`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'WITHDRAWN', note: 'Skipped by user' }) });
+                      if (r.ok) { const r2 = await api(`/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []); }
                     }} className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-300">SKIP</button>
                   </div>
                   {approvalPkg?.appId === a.id && (
@@ -534,12 +544,12 @@ export default function App() {
                             <textarea value={verifyForm.note} onChange={(e) => setVerifyForm({ ...verifyForm, note: e.target.value })} placeholder="Note: sender domain, date received, portal status…" rows={2} className="mt-2 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-xs" />
                             <button onClick={async () => {
                               if (!verifyForm.note.trim()) return alert('Add a short note about the proof');
-                              const r = await fetch(`${API_URL}/applications/${a.id}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(verifyForm) });
+                              const r = await api(`/applications/${a.id}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(verifyForm) });
                               const j = await r.json();
                               if (!r.ok) return alert(j.error + ': ' + (j.message ?? ''));
                               setVerifyForm({ method: 'confirmation_email', confirmationRef: '', note: '' });
                               setApprovalPkg(null);
-                              const r2 = await fetch(`${API_URL}/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
+                              const r2 = await api(`/applications`); const j2 = await r2.json(); setApplications(j2.applications ?? []);
                             }} className="mt-2 rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-slate-950">Mark Verified</button>
                           </div>
                         </>
@@ -578,10 +588,10 @@ export default function App() {
                                   <button onClick={async () => {
                                     const val = (answerDrafts[ans.key] ?? '').trim();
                                     if (!val) return alert('Enter an answer first');
-                                    const r = await fetch(`${API_URL}/applications/${a.id}/answers`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: [{ key: ans.key, answer: val }] }) });
+                                    const r = await api(`/applications/${a.id}/answers`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: [{ key: ans.key, answer: val }] }) });
                                     if (r.ok) {
                                       setAnswerDrafts((p) => { const n = { ...p }; delete n[ans.key]; return n; });
-                                      const c = await fetch(`${API_URL}/applications/${a.id}/check`); const cj = await c.json();
+                                      const c = await api(`/applications/${a.id}/check`); const cj = await c.json();
                                       setApprovalPkg((p: any) => ({ ...p, ...cj, appId: a.id, isCheck: true }));
                                     }
                                   }} className="mt-1 rounded-md bg-amber-500 px-3 py-1 text-[11px] font-semibold text-slate-950">Save answer</button>

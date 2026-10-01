@@ -23,7 +23,9 @@ const EDUCATION_KEYWORDS = ['b.tech','b.e','bca','mca','m.tech','bachelor','degr
 export function parseJobDescription(title: string, description: string, employmentType: string): ParsedJob {
   const text = `${title} ${description}`.toLowerCase();
   const requiredSkills = KNOWN_SKILLS.filter(k => text.includes(k));
-  const experienceMatch = text.match(/(\d+)\s*\+?\s*(years?|yrs?)\s*(experience|exp)/i) || text.match(/(fresher|0\s*-\s*1\s*year|0-1\s*years)/i);
+  // Accept "5+ years", "5 years of experience", "5 yrs experience", "minimum 3 years experience"
+  const experienceMatch = text.match(/(\d+)\s*\+?\s*(?:years?|yrs?)(?:\s+of)?\s*(?:experience|exp|background)/i)
+    || text.match(/(fresher|0\s*-\s*1\s*year|0-1\s*years)/i);
   let experienceYears: number | undefined;
   if (experienceMatch) {
     const num = parseInt(experienceMatch[1] ?? '0', 10);

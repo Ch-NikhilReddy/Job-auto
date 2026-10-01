@@ -9,9 +9,11 @@ import { applicationRoutes } from './routes/applications.js';
 import { automationRoutes } from './routes/automation.js';
 import { documentRoutes } from './routes/documents.js';
 import { timelineRoutes } from './routes/timeline.js';
+import { outreachRoutes } from './routes/outreach.js';
 
 import { startDiscoveryWorker } from './workers/discoveryWorker.js';
 import { startAutoApplyWorker } from './workers/autoApplyWorker.js';
+import { registerApiKeyAuth } from './config/apiAuth.js';
 
 async function buildServer() {
   const app = Fastify({ logger: appConfig.env !== 'production' });
@@ -19,6 +21,9 @@ async function buildServer() {
   await app.register(cors, {
     origin: true,
   });
+
+  // Protect all non-health routes with an API key (PII + auto-apply endpoints)
+  registerApiKeyAuth(app);
 
   // Start background workers in-process (cloud: this service stays alive 24/7)
   startDiscoveryWorker();
@@ -33,6 +38,7 @@ async function buildServer() {
     await automationRoutes(instance);
     await documentRoutes(instance);
     await timelineRoutes(instance);
+    await outreachRoutes(instance);
   });
 
   return app;

@@ -27,6 +27,16 @@ services:
         value: "false"
       - key: SOURCE_TIMEOUT_MS
         value: "20000"
+      - key: API_KEY
+        generateValue: true
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: NOTIFY_EMAIL
+        value: nikhilreddynikhil988@gmail.com
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
