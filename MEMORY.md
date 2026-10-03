@@ -36,9 +36,16 @@ Discovery (7 live APIs, 35 filtered jobs) · transparent matching · DOCX+PDF ta
 8. `ai/provider.ts` intentionally returns `mockProvider` — template-based by design to avoid hallucination.
 9. Single-user constant `user-demo-nikhil` is hardcoded across routes.
 
-## Open item (awaiting owner decision)
+## Resolved in P0 cleanup (verified)
 
-Public repo tracks **9 resumes with PII**; several old variants mention **2CaRvN** — contradicts his instruction. Options: delete old variants / gitignore `Resumes/` / leave. **Not actioned.** Note: git history still holds them; purge needs `git filter-repo`.
+- `Resumes/` **untracked** (`git rm --cached`) + gitignored, along with `generated/`, `*.docx`, `*.pdf`. Files still on disk. 5 of 9 contained `2CaRvN`. **Git history still holds them — purge needs `git filter-repo` + force push, awaiting owner approval.**
+- `render.yaml` had an **`S3_BUCKET` typo**: `careepilot-documents` → fixed to `careerpilot-documents`. Would have broken S3 uploads if the Render dashboard didn't already override it.
+- Local `.env` `AUTO_APPLY_DOMAINS` was **12 domains** vs the documented 7. Removed `apply.indeed.com`, `hire.withgoogle.com`, `myworkdayjobs.com` (aggressive anti-bot → guaranteed `BLOCKED_CAPTCHA`) and `jobs.jobvite.com`. Now matches prod exactly. **Production was always correct — the risk was dev-only.**
+- Local `API_KEY` now set (was missing → `apiAuth` was a **no-op in dev**). Local value differs from prod; keep Render `API_KEY` == Vercel `VITE_API_KEY`.
+
+## Open item (needs owner decision)
+
+History purge of the 9 resumes (see above). Everything else in P0 is done.
 
 ## Verify before claiming done
 

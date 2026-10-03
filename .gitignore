@@ -5,3 +5,10 @@ coverage/
 .env.*
 .DS_Store
 .vite/
+
+# PII — never track personal documents (see HANDOFF.md §9)
+# Resumes contain phone/email; several old variants mention 2CaRvN.
+Resumes/
+generated/
+*.docx
+*.pdf

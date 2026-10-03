@@ -46,7 +46,7 @@ services:
       - key: S3_REGION
         value: ap-south-1
       - key: S3_BUCKET
-        value: careepilot-documents
+        value: careerpilot-documents
       - key: S3_ACCESS_KEY
         sync: false
       - key: S3_SECRET_KEY

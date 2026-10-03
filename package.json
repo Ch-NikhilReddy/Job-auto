@@ -10,7 +10,7 @@
     "dev:api": "npm run dev -w @careerpilot/api",
     "dev:web": "npm run dev -w @careerpilot/web",
     "build": "npm run build -ws",
-    "test": "npm run test -ws --if-present"
+    "test": "npm run test --ws --if-present"
   },
   "devDependencies": {
     "@prisma/client": "^5.22.0",

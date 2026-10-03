@@ -226,16 +226,21 @@ PORT=4000
 
 ---
 
-## 9. OPEN DECISION — NEEDS THE OWNER
+## 9. RESOLVED — resumes removed from git tracking
 
-**The public repo tracks 9 resume documents** with phone/email PII, and several are old variants that **mention 2CaRvN** — which the owner explicitly asked to keep out of his applications. A recruiter checking GitHub would see exactly what he wanted removed.
+**Was:** the public repo tracked 9 resume documents with phone/email PII, and several old variants **mention 2CaRvN** — which the owner explicitly asked to keep out of his applications. Verified by unzipping each `.docx` and grepping `word/document.xml`:
 
-Options presented:
-1. Delete the 7 superseded resume variants, keep only `Nikhil_Resume_Final_Job_Internship.docx`
-2. Add `Resumes/` to `.gitignore` (recommended)
-3. Leave as-is
+| Contains `2CaRvN` (5) | Clean (4) |
+|---|---|
+| `Nikhil_Resume_BackendFullStack.docx` | `Nikhil_Cover_Letter_General.docx` |
+| `Nikhil_Resume_EdTechProductDeveloper.docx` | `Nikhil_Reddy_CH.docx` |
+| `Nikhil_Resume_FrontendDeveloper.docx` | `Nikhil_Resume.docx` |
+| `Nikhil_Resume_General.docx` | |
+| `Nikhil_Resume_SoftwareDeveloper.docx` | |
 
-**Not actioned — awaiting owner's choice.** Also note: removing files from git does **not** purge them from history; a full purge needs `git filter-repo` + force push.
+**Actioned:** `git rm --cached -r Resumes` — files **remain on disk** for local use, tracking removed. `.gitignore` now excludes `Resumes/`, `generated/`, `*.docx`, `*.pdf`. No application code referenced `Resumes/`, so nothing broke.
+
+> **STILL OPEN — history purge.** Removing files from the index does **not** purge prior commits. Anyone with the old commits can still recover all 9 files. A real purge needs `git filter-repo --path Resumes --invert-paths` + force push. **Requires owner approval — destructive and rewrites shared history.**
 
 ---
 
