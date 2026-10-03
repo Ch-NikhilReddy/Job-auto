@@ -18,6 +18,42 @@ describe('adapters — relevance gates', () => {
     expect(isRelevantLocation('Remote (Worldwide)')).toBe(true);
     expect(isRelevantLocation('New York, USA')).toBe(false);
   });
+
+  // Regression: the old SENIOR_BLOCKLIST used the substring 'lead ' (trailing
+  // space) so "Lead, Platform Engineering" passed, and it had no numbered
+  // levels so "Software Engineer 3" passed. Both were live MongoDB Gurugram
+  // roles — senior, and not applyable by a 2027-graduate intern seeker.
+  it('rejects numbered and roman seniority ladders', () => {
+    for (const t of [
+      'Software Engineer 3', 'Software Engineer 2', 'Lead, Platform Engineering',
+      'Team Lead Engineer', 'SWE II', 'Engineer III', 'L3 Software Engineer',
+    ]) {
+      expect(isEntryLevel(t, '')).toBe(false);
+    }
+  });
+  it('still accepts genuinely entry-level ladders', () => {
+    for (const t of ['Software Engineer I', 'Engineer 1', 'Software Engineer Intern', 'Associate Engineer']) {
+      expect(isEntryLevel(t, '')).toBe(true);
+    }
+  });
+
+  // Regression: isRelevantLocation used to return true for anything containing
+  // "remote", so "Remote - United States", "Remote (US)" and "Ontario - Remote"
+  // all passed — none applyable from Hyderabad.
+  it('drops region-locked remote roles', () => {
+    for (const l of [
+      'Remote - United States', 'Remote (US)', 'Remote - Japan', 'Remote - Canada',
+      'Ontario - Remote', 'Remote, United Kingdom', 'Remote - Germany',
+      'Remote - Brazil; Remote, Mexico', 'Remote, AMER',
+    ]) {
+      expect(isRelevantLocation(l)).toBe(false);
+    }
+  });
+  it('keeps globally open remote roles', () => {
+    for (const l of ['Remote (Worldwide)', 'Remote, Global', 'Remote - APAC', 'Remote - India', 'Remote']) {
+      expect(isRelevantLocation(l)).toBe(true);
+    }
+  });
   it('rejects non-tech noise', () => {
     expect(isTechRelevant('B2B Sales Executive', [], '')).toBe(false);
     expect(isTechRelevant('Video Editor Intern', [], '')).toBe(false);

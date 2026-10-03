@@ -28,21 +28,34 @@ async function getJson(url: string): Promise<any | null> {
 // at ingestion. This keeps the pipeline cheap (AGENTS.md §24) and the signal high.
 const SENIOR_BLOCKLIST = [
   'senior', 'sr.', 'sr ', 'staff', 'principal', 'manager', 'management', 'director', 'head of',
-  'lead ', 'leader', 'architect', 'vp', 'vice president', 'chief', 'partner', 'counsel',
-  'experienced', 'expert', 'ii', 'iii', 'associate director', 'associate vice',
+  'leader', 'architect', 'vp', 'vice president', 'chief', 'partner', 'counsel',
+  'experienced', 'expert', 'associate director', 'associate vice',
   'general manager', 'associate partner', 'supervisor',
 ];
-const ENTRY_HINTS = [
-  'intern', 'internship', 'trainee', 'graduate', 'fresher', 'entry', 'junior', 'jr.',
-  'campus', 'apprentice', 'co-op', 'coop', 'new grad', '0-1', '0 - 1', 'associate',
-  'engineer i', 'software engineer', 'developer', 'sde', 'engineer',
+
+// Numbered/roman seniority ladders that the substring list above misses.
+// Verified against live data: "Software Engineer 3" (MongoDB Gurugram) and
+// "Lead, Platform Engineering" both passed the old gate — the old 'lead ' entry
+// required a trailing space, so "Lead," never matched. These are not applyable
+// by a 2027-graduate intern seeker.
+const SENIOR_LEVEL_RE = [
+  /\blead\b/,                                  // Lead, / Team Lead / Lead Engineer
+  /\b(?:ii|iii|iv|v)\b/,                        // SWE II / Engineer III
+  /\b(?:l|sw|eng|software|developer)?\s*(?:level\s*)?[2-5]\b(?!\.\d)/, // L3 / Engineer 3 / SWE2
 ];
 
 export function isEntryLevel(title: string, description: string): boolean {
   const t = title.toLowerCase();
   if (SENIOR_BLOCKLIST.some((s) => t.includes(s))) return false;
+  if (SENIOR_LEVEL_RE.some((re) => re.test(t))) return false;
   return true;
 }
+
+const ENTRY_HINTS = [
+  'intern', 'internship', 'trainee', 'graduate', 'fresher', 'entry', 'junior', 'jr.',
+  'campus', 'apprentice', 'co-op', 'coop', 'new grad', '0-1', '0 - 1', 'associate',
+  'engineer i', 'software engineer', 'developer', 'sde', 'engineer',
+];
 
 export function isInternshipish(title: string, description: string, employmentType: string): boolean {
   if (employmentType === 'internship') return true;
@@ -65,10 +78,21 @@ export function extractSkills(text: string): string[] {
 const INDIA_RE = /india|hyderabad|bengaluru|bangalore|pune|delhi|noida|mumbai|gurgaon|gurugram|hyderabad|telangana|chennai|pune|bangalore|kolkata|ahmedabad|kochi|jaipur|indore|bhubaneswar|coimbatore/i;
 const REMOTE_RE = /remote|anywhere|worldwide|work from home|wfh|virtual/i;
 
+// A bare "remote" match is not enough. Verified against live data: MongoDB's
+// "Remote - United States", Twilio's "Remote - United Kingdom", Replit's
+// "Remote - Japan" and Ramp's "Remote (US)" all passed the old gate because the
+// string contains "remote" — none of them are applyable from Hyderabad.
+const REMOTE_ANYWHERE_RE = /worldwide|world wide|global|anywhere|india|apac|asia/i;
+const REGION_LOCKED_RE = /united states|\busa\b|\bus\b|canada|ontario|toronto|vancouver|quebec|calgary|united kingdom|\buk\b|ireland|france|germany|netherlands|spain|portugal|italy|austria|sweden|norway|denmark|finland|poland|australia|new zealand|japan|singapore|brazil|mexico|latam|latin|\bamer\b|emea|colombia|argentina|chile|turkey|israel|dubai|\buae\b|qatar|saudi|hong kong|taiwan|philippines|indonesia|vietnam|thailand|malaysia|south africa|nigeria|kenya|ghana|egypt|california|san francisco|\bnyc\b|new york|texas|seattle|portland|denver|austin|boston|chicago|san jose|los angeles|atlanta|miami|dallas|philadelphia|bay area|pacific|mountain time|central time|eastern time/;
+
 export function isRelevantLocation(location: string): boolean {
   const l = (location ?? '').toLowerCase();
   if (!l) return true; // unknown → keep, matcher scores it later
-  return INDIA_RE.test(l) || REMOTE_RE.test(l);
+  if (INDIA_RE.test(l)) return true;
+  if (!REMOTE_RE.test(l)) return false;
+  // Remote, but scoped — keep only if it is genuinely worldwide / APAC / India.
+  if (REMOTE_ANYWHERE_RE.test(l)) return true;
+  return !REGION_LOCKED_RE.test(l);
 }
 
 // Non-tech noise common on aggregator boards
@@ -100,11 +124,14 @@ const envList = (v?: string, fallback: string[] = []): string[] => {
   return fallback;
 };
 
+// VERIFIED 2026-10-03 by probing boards-api.greenhouse.io directly.
+// The previous list of 29 was almost entirely dead: 26 of 29 returned HTTP 404.
+// Company names are NOT Greenhouse board tokens, and most of these companies do
+// not use Greenhouse at all. Only the tokens below were confirmed HTTP 200.
+// Override with GREENHOUSE_BOARDS to add your own.
 const GREENHOUSE_BOARDS = envList(process.env.GREENHOUSE_BOARDS, [
-  'freshworks', 'razorpay', 'zomato', 'swiggy', 'postman', 'browserstack', 'chargebee',
-  'hasura', 'zendesk', 'innovaccer', 'dream11', 'upgrad', 'meesho', 'groww', 'cred',
-  'practo', 'nykaa', 'mytra', 'slice', 'jupiter', 'acko', 'delhivery',
-  'udaan', 'OYO', 'OYOrooms', 'tally', 'zoho', 'freshdesk',
+  'mongodb', 'gitlab', 'twilio', 'samsara', 'planetscale', 'vercel',
+  'databricks', 'mixpanel', 'slice', 'groww',
 ]);
 
 export function greenhouseRealAdapter(): JobSourceAdapter {
@@ -156,10 +183,58 @@ export function greenhouseRealAdapter(): JobSourceAdapter {
 }
 
 // ── Lever companies ──
+// VERIFIED 2026-10-03 against api.lever.co. Previous list of 14 had 11 dead
+// tokens (404). Override with LEVER_COMPANIES.
 const LEVER_COMPANIES = envList(process.env.LEVER_COMPANIES, [
-  'swiggy', 'meesho', 'razorpay', 'zomato', 'postman', 'hasura', 'browserstack',
-  'chargebee', 'tally', 'dream11', 'groww', 'slice', 'cred', 'acko',
+  'meesho', 'cred', 'fi',
 ]);
+
+// Ashby — public, keyless posting API. Was NOT integrated at all before.
+// VERIFIED 2026-10-03: these tokens return HTTP 200 AND survive the India/remote
+// gates. Notion (Hyderabad), cursor (Bengaluru), cognition (India) and openai
+// (Delhi) are genuine India-eligible hits.
+const ASHBY_BOARDS = envList(process.env.ASHBY_BOARDS, [
+  'Notion', 'cursor', 'cognition', 'openai', 'Supabase', 'runpod',
+]);
+
+export function ashbyRealAdapter(): JobSourceAdapter {
+  return {
+    name: 'Ashby',
+    capabilities: { search: true, fetchDetails: true, supportsApply: true },
+    isEnabled() { return ASHBY_BOARDS.length > 0; },
+    async fetchJobs(): Promise<AdapterResult> {
+      const jobs: RawJob[] = [];
+      const results = await Promise.all(
+        ASHBY_BOARDS.map(async (token) => ({ token, data: await getJson(`https://api.ashbyhq.com/posting-api/job-board/${token}`) }))
+      );
+      for (const { token, data } of results) {
+        for (const j of data?.jobs ?? []) {
+          const title: string = j?.title ?? '';
+          if (!title) continue;
+          const loc = j?.location ?? 'Remote';
+          const description = stripHtml(j?.descriptionHtml ?? j?.descriptionPlain ?? j?.description ?? '').slice(0, 6000);
+          if (!isEntryLevel(title, description)) continue;
+          if (!isRelevantLocation(loc)) continue;
+          const skills = extractSkills(`${title} ${description}`);
+          if (!isTechRelevant(title, skills, description)) continue;
+          jobs.push({
+            externalId: `ashby-${token}-${j.id}`,
+            title,
+            company: token,
+            location: loc,
+            workMode: /remote/i.test(loc) ? 'remote' : 'hybrid',
+            employmentType: isInternshipish(title, description, 'full-time') ? 'internship' : 'full-time',
+            skills,
+            description,
+            url: j?.jobUrl ?? j?.applyUrl,
+            postedAt: j?.publishedAt ? String(j.publishedAt).slice(0, 10) : undefined,
+          });
+        }
+      }
+      return { jobs, sourceName: 'Ashby', fetchedAt: new Date().toISOString() };
+    },
+  };
+}
 
 export function leverRealAdapter(): JobSourceAdapter {
   return {
@@ -289,6 +364,7 @@ export const jobicyAdapter = remoteAdapter({ name: 'Jobicy', url: 'https://jobic
 export const realAdapters: JobSourceAdapter[] = [
   greenhouseRealAdapter(),
   leverRealAdapter(),
+  ashbyRealAdapter(),
   remotiveAdapter(),
   himalayasAdapter,
   remoteokAdapter,

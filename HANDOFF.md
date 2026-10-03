@@ -26,13 +26,14 @@ Health check: `GET /health` → `{"ok":true,"checks":{api/db/queue/storage}}`
 
 ## 2. WHAT IS BUILT AND WORKING
 
-### 2.1 Job discovery — 7 live public APIs
+### 2.1 Job discovery — 8 live public APIs
 `apps/api/src/adapters/realAdapters.ts`
 
 | Source | Endpoint | Notes |
 |---|---|---|
-| Greenhouse | `boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true` | 29 default Indian startup boards |
-| Lever | `api.lever.co/v0/postings/{company}?mode=json` | 14 default companies |
+| Greenhouse | `boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true` | 10 **verified** boards |
+| Lever | `api.lever.co/v0/postings/{company}?mode=json` | 3 **verified** companies |
+| Ashby | `api.ashbyhq.com/posting-api/job-board/{token}` | 6 **verified** boards — **new** |
 | Remotive | `remotive.com/api/remote-jobs?limit=100` | remote |
 | Himalayas | `himalayas.app/jobs/api?limit=100` | remote |
 | RemoteOK | `remoteok.com/api` | remote |
@@ -41,12 +42,21 @@ Health check: `GET /health` → `{"ok":true,"checks":{api/db/queue/storage}}`
 
 All are **public, keyless, documented APIs**. No scraping, no auth, no ToS bypass.
 
+> **MAJOR FIX (2026-10-03).** The previous board lists were **almost entirely dead tokens**. Probing every endpoint directly: **26 of 29 Greenhouse boards returned HTTP 404**, and **11 of 14 Lever companies returned 404**. Company names are *not* ATS board tokens — most of those companies do not use Greenhouse at all. Only `slice`, `groww`, `tcs` (GH) and `meesho`, `cred`, `fi` (Lever) actually resolved. Every token now in the defaults was confirmed HTTP 200 by live probe. **Do not add tokens by guessing company names — probe them first.** Ashby was not integrated before and is now the single biggest source.
+
 **Three quality gates** (applied per-job, in `realAdapters.ts`):
-1. `isEntryLevel()` — rejects `senior/sr /staff/principal/manager/director/head of/lead /architect/vp/…`
-2. `isRelevantLocation()` — India OR Remote only (user is Hyderabad, open to remote)
+1. `isEntryLevel()` — rejects `senior/sr /staff/principal/manager/director/head of/architect/vp` **plus numbered ladders** (`Engineer 2/3`, `SWE II`, `L3`) and `lead` (word-boundary)
+2. `isRelevantLocation()` — India OR genuinely-global Remote. **Region-locked remote is rejected**
 3. `isTechRelevant()` — needs a tech title or ≥2 extracted skills; rejects sales/content/BPO/annotation noise
 
-**Measured:** 35 relevant jobs from 7 sources in ~6s (13 internships).
+**Measured 2026-10-03 (live, post-fix):** **82 jobs, 45 internships, 21 India-based** across 8 sources.
+Per-source: Greenhouse 18 (9 intern, 14 India) · Ashby 34 (22 intern, 7 India) · RemoteOK 16 · Arbeitnow 7 · Himalayas 6 · Lever 1 · Remotive 0 · Jobicy 0.
+
+> **GATE BUGS FIXED — regression-tested, do not revert.** Live probing found two gates passing jobs that are not applyable by a 2027-graduate intern seeker:
+> - `isEntryLevel` used the substring `'lead '` (trailing space), so **"Lead, Platform Engineering" passed**, and it had no numbered levels, so **"Software Engineer 3" passed** — both live MongoDB Gurugram roles.
+> - `isRelevantLocation` returned true for *anything* containing "remote", so **"Remote - United States", "Remote (US)", "Ontario - Remote"** all passed.
+> Both now have dedicated tests in `matching.test.ts`. Removing them will re-admit unapplyable jobs.
+
 Toggle mock data with `USE_MOCK_SOURCES=true` (falls back to 8 seeded jobs in `src/data/jobs.ts`).
 
 ### 2.2 Matching engine — transparent scoring
@@ -165,15 +175,17 @@ cd apps/api && npx vitest run
 
 | File | Tests | Covers |
 |---|---|---|
-| `qaAgent.test.ts` | 8 | fabrication blocking, 2CaRvN flag, visa warning |
+| `qaAgent.test.ts` | 10 | fabrication blocking, 2CaRvN flag, visa warning |
 | `applicationAnswerAgent.test.ts` | 13 | profile-only answers, 9 must-ask patterns |
-| `applicationExecutor.test.ts` | 12 | all 9 submit blockers incl. fees/CAPTCHA/duplicates |
+| `applicationExecutor.test.ts` | 11 | all 9 submit blockers incl. fees/CAPTCHA/duplicates |
 | `autoApplier.test.ts` | 7 | allowlist, subdomain spoofing, field mapping |
-| `matching.test.ts` | 11 | relevance gates + transparent scoring |
+| `matching.test.ts` | 13 | relevance gates + transparent scoring **+ 4 new gate regression tests** |
 | `documents.test.ts` | 5 | project reordering, no fabricated years |
 | `outreach.test.ts` | 7 | truthfulness, placeholders, no 2CaRvN |
 
-**Regression warning:** two of these tests exist specifically to catch the experience-regex and `sr ` filter bugs described in §2.2. Don't delete them.
+Total: **66 passing**.
+
+**Regression warning:** several tests exist specifically to catch the experience-regex, `sr ` filter, `lead `/numbered-level and region-locked-remote gate bugs described in §2.1–2.2. Don't delete them.
 
 ---
 

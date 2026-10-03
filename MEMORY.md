@@ -35,6 +35,15 @@ Discovery (7 live APIs, 35 filtered jobs) · transparent matching · DOCX+PDF ta
 7. Experience-regex bug (`"5+ years of experience"` missed) is FIXED and regression-tested. Don't revert.
 8. `ai/provider.ts` intentionally returns `mockProvider` — template-based by design to avoid hallucination.
 9. Single-user constant `user-demo-nikhil` is hardcoded across routes.
+10. **ATS board tokens are NOT company names.** 26 of 29 old Greenhouse tokens were HTTP 404. **Probe an endpoint before adding a token** — never guess.
+11. **`isEntryLevel` and `isRelevantLocation` gate bugs are FIXED + regression-tested.** Old code passed "Lead, Platform Engineering", "Software Engineer 3", "Remote - United States", "Ontario - Remote". Don't revert — they re-admit unapplyable senior/US-only jobs.
+
+## Discovery state (measured 2026-10-03)
+
+**82 jobs · 45 internships · 21 India-based** across 8 sources (was a documented 35/13).
+Ashby is new and is the biggest single source (34 jobs, 22 intern, 7 India).
+India-eligible boards include Notion (Hyderabad), cursor (Bengaluru), cognition, openai (Delhi), mongodb (Gurugram).
+Remotive and Jobicy currently return 0 — either API drift or correctly filtered.
 
 ## Resolved in P0 cleanup (verified)
 
